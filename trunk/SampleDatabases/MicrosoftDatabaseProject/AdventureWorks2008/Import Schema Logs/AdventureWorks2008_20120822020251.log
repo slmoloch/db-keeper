@@ -1,0 +1,10 @@
+8/22/2012 10:02:51 AM	This log contains information about the import schema operation into project 'AdventureWorks2008' on computer 'SLBIG' by user 'Moloch'.
+8/22/2012 10:02:51 AM	Creating database project...
+8/22/2012 10:02:52 AM	Done
+8/22/2012 10:02:53 AM	Import of database schema has started.
+8/22/2012 10:02:57 AM	Adding all files to the project...
+8/22/2012 10:02:59 AM	Finished adding all files to the project.
+8/22/2012 10:02:59 AM	Done
+8/22/2012 10:02:59 AM	Import of database schema is complete.
+8/22/2012 10:02:59 AM	A summary of the import operation was saved to the log file z:\Temp\SampleDatabase\AdventureWorks2008\AdventureWorks2008\Import Schema Logs\AdventureWorks2008_20120822020251.log.
+8/22/2012 10:02:59 AM	Click Finish to continue...
