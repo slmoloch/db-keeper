@@ -174,7 +174,7 @@ function create-database-tool
             param ([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $table, [string] $output)
         
             # source and destination are deliberately swapped due to tablediff behaviour
-            $out = & $config.tablefiff_tool -sourceserver $config.serverName -sourcedatabase $destinationDatabaseName -sourcetable $table -destinationserver $config.serverName -destinationdatabase $sourceDatabaseName -destinationtable $table -f $output -strict
+            $out = & $config.tablediff_tool -sourceserver $config.serverName -sourcedatabase $destinationDatabaseName -sourcetable $table -destinationserver $config.serverName -destinationdatabase $sourceDatabaseName -destinationtable $table -f $output -strict
             $out = [string]::join([Environment]::NewLine, $out)
             
             if($out.Contains("does not exist, or the user specified doesn't have permissions to access it"))

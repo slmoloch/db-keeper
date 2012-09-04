@@ -1,9 +1,9 @@
 function new-folder-structure
 {
-    param($config, $tupleFactory, $fileSystem)
+    param($config, $fileSystem)
     
     New-Module {
-        param ($config, $tupleFactory, $fileSystem)
+        param ($config, $fileSystem)
 
         $tempFolder = join-path $env:temp "database-automation"
         $sourcesFolder = join-path $tempFolder "Sources"
@@ -14,26 +14,17 @@ function new-folder-structure
         
         function NewSolutionPackage
         {
-            $solutionPackage = new-solution-package $sourcesFolder $fileSystem
-            $solutionPackage.Init()
-            $solutionPackage
+            $fileSystem.Recreate($sourcesFolder)
+            $sourcesFolder
         }  
-        
-        function NewSlicesPackage
-        {
-            $slicesPackage = new-slices-package $filesystem $slicesFolde
-            $slicesPackage.Init() 
-            $slicesPackage
-        }     
         
         function NewSlicePackage
         {
             param ($version)
             
             $sliceFolder = join-path $slicesFolder $version
-            $slicePackage = new-slice-package $config $sliceFolder $tupleFactory $fileSystem
-            $slicepackage.Init()
-            $slicepackage
+            $fileSystem.Recreate($sliceFolder)
+            $sliceFolder
         }
         
         function GetSlicePackage
@@ -41,8 +32,7 @@ function new-folder-structure
             param ($version)
             
             $sliceFolder = join-path $slicesFolder $version
-            $slicePackage = new-slice-package $config $sliceFolder $tupleFactory $fileSystem
-            $slicepackage
+            $sliceFolder
         }
         
         function NewDeltaPackage
@@ -65,93 +55,9 @@ function new-folder-structure
         function NewCheckDeltaPath
         {
             $fileSystem.Recreate($checkDeltaPath)
-            
             $checkDeltaPath
         }
 
-        function new-solution-package
-        {
-            param($sourcesPath, $fileSystem)
-            
-            New-Module {
-                param ($sourcesPath, $fileSystem)
-                
-                $schemaName = "TestDatabase.dbschema"
-            
-                $solutionBasePath = join-path $sourcesPath "Scratchpad\Yauheni\DatabaseCi\TestDatabase"    
-               
-                function StaticDataPath
-                {
-                    param ($tableName)
-                    
-                    join-path (join-path $deltaFolder "Commit") ("data_" + $tableName + ".sql")
-                }
-                
-                function Root
-                {
-                    $sourcesPath
-                }
-                
-                function Init
-                {
-                    $fileSystem.Recreate($sourcesPath)
-                }
-                
-                function ReleasePath
-                {
-                    join-path $solutionBasePath (join-path "TestDatabase\sql\Release" $schemaName)
-                }
-                
-                function SolutionPath
-                {
-                    join-path $solutionBasePath "TestDatabase.sln"
-                }
-                
-                function ReleaseRevisionsPath
-                {
-                    join-path $solutionBasePath "slices.xml"
-                }
-                
-                function GetMigration
-                {
-                    param ([int] $from, [int] $to)
-                    
-                    $migrationsPath = join-path $solutionBasePath "TestDatabase\Scripts\Migrations"
-                    
-                    join-path $migrationsPath ($from.ToString() + "-" + $to.ToString() + ".sql")
-                }
-                
-                function ListMigrations
-                {
-                    $migrationsPath = join-path $solutionBasePath "TestDatabase\Scripts\Migrations"
-                    
-                    if (test-path $migrationsPath)
-                    {
-                        get-childItem $migrationsPath "*.sql"
-                    }
-                    else
-                    {
-                        @()
-                    }
-                }
-                
-                function ListStaticDataFiles
-                {
-                    $staticDataPath = join-path $solutionBasePath "TestDatabase\Scripts\StaticData"
-                     
-                    if (test-path $staticDataPath)
-                    {
-                        get-childItem $staticDataPath
-                    }
-                    else
-                    {
-                        @()
-                    }   
-                }
-                
-                Export-ModuleMember -Function *                
-            } -ArgumentList @($sourcesPath, $fileSystem) -asCustomObject  
-        }
         
         function new-delta-package
         {
@@ -207,5 +113,5 @@ function new-folder-structure
         }
         
         Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList @($config, $tupleFactory, $fileSystem) -asCustomObject    
+    } -ArgumentList @($config, $fileSystem) -asCustomObject    
 }

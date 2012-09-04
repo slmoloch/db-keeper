@@ -1,4 +1,4 @@
-function create-tfs-connector
+function new-version-control
 {
     param($config)
     
