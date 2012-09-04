@@ -1,9 +1,9 @@
 function create-workflow
 {
-    param($tupleFactory, $materialSource, $sourceControl, $foldersStructure, $database, $fileSystem)
+    param($tupleFactory, $materialSource, $versionControl, $foldersStructure, $database, $fileSystem, $config)
     
     New-Module {        
-        param($tupleFactory, $materialSource, $sourceControl, $foldersStructure, $database, $fileSystem)
+        param($tupleFactory, $materialSource, $versionControl, $foldersStructure, $database, $fileSystem, $config)
         
         function delta-from-migrations
         {
@@ -105,61 +105,45 @@ function create-workflow
 
         function get-deltas
         {
-            param ([object] $materialSource, [object] $foldersStructure, [int] $latestVersion, [object] $solutionPackage)
+            param ([int] $latestVersion, [string] $solutionPath)
             
-            $versions    = ,0 + $materialSource.GetTransitionVersions($solutionPackage) + ,$latestVersion
+            $versions    = ,0 + $materialSource.GetTransitionVersions($solutionPath) + ,$latestVersion
             $transitions = delta-from-array $versions
-            $migrations  = delta-from-migrations $materialSource.GetMigrations($solutionPackage)
+            $migrations  = delta-from-migrations $materialSource.GetMigrations($solutionPath)
 
             coalesce-transitions-and-migrations $transitions $migrations
         }
 
-        function create-slice-package 
-        {
-            param([string] $packagePath)
-            
-            new-slice-package $config $packagePath $tupleFactory
-        }
-
-        function create-initial-snapshot
-        {
-            param ([object] $materialSource, [object] $config, [object] $delta, [object] $deltaPackage, [object] $slicePackage)
-            
-            $sourceDatabaseName = $config.databaseName + $delta.FromVersion
-            $destinationDatabaseName = $config.databaseName + $delta.ToVersion
-
-            $database.ScriptDatabase($sourceDatabaseName, $destinationDatabaseName, $config.databaseName, $deltaPackage.SchemaPath())
-            $database.GenerateDropScript($config.databaseName, $deltaPackage.RollbackSchemaPath())
-            $database.DropDatabase($config.databaseName)
-            
-            foreach($table in @($materialSource.GetStaticTables($slicePackage)))
-            {               
-                copy-item $table.Path $deltaPackage.StaticDataPath($table.Name)
-            }
-        }
-
         function create-migration-delta
         {
-            param ([object] $materialSource, [object] $solutionPackage, [object] $deltaPackage, [object] $delta)
+            param ([object] $materialSource, [string] $solutionPath, [object] $deltaPackage, [object] $delta)
             
-            copy-item $materialSource.GetMigrationPath($solutionPackage, $delta.FromVersion, $delta.ToVersion) $deltaPackage.SchemaPath()
-            copy-item $materialSource.GetMigrationPath($solutionPackage, $delta.ToVersion, $delta.FromVersion) $deltaPackage.RollbackSchemaPath()
+            copy-item $materialSource.GetMigrationPath($solutionPath, $delta.FromVersion, $delta.ToVersion) $deltaPackage.SchemaPath()
+            copy-item $materialSource.GetMigrationPath($solutionPath, $delta.ToVersion, $delta.FromVersion) $deltaPackage.RollbackSchemaPath()
         }
 
         function create-transition-delta
         {
-            param ([object] $materialSource, [object] $database, [object] $config, [object] $sourceSlicePackage, [object] $destinationSlicePackage, [object] $deltaPackage, [object] $delta)
+            param ([string] $destinationBuildPath, [object] $deltaPackage, [object] $delta)
             
             $sourceDatabaseName = $config.databaseName + $delta.FromVersion
             $destinationDatabaseName = $config.databaseName + $delta.ToVersion
             $tailDatabaseName = $config.databaseName + "_tail_" + $delta.FromVersion
 
-            $database.CompareDatabases($sourceDatabaseName, $destinationDatabaseName, $deltaPackage.SchemaPath())
-            $database.CompareDatabases($destinationDatabaseName, $sourceDatabaseName, $deltaPackage.RollbackSchemaPath())
+            if($delta.FromVersion -eq 0)
+            {
+                $database.ScriptDatabase($sourceDatabaseName, $destinationDatabaseName, $config.databaseName, $deltaPackage.SchemaPath())
+                $database.GenerateDropScript($config.databaseName, $deltaPackage.RollbackSchemaPath())
+            }
+            else
+            {
+                $database.CompareDatabases($sourceDatabaseName, $destinationDatabaseName, $deltaPackage.SchemaPath())
+                $database.CompareDatabases($destinationDatabaseName, $sourceDatabaseName, $deltaPackage.RollbackSchemaPath())
+            }
 
             $database.Execute($deltaPackage.SchemaPath(), $tailDatabaseName)
 
-            $staticTables = @($materialSource.GetStaticTables($destinationSlicePackage) | % { $_.Name })
+            $staticTables = $materialSource.GetStaticTables($destinationBuildPath)
 
             $database.CompareTables($tailDatabaseName, $destinationDatabaseName, $staticTables, { param($name) $deltaPackage.StaticDataPath($name) })
             $database.CompareTables($destinationDatabaseName, $tailDatabaseName, $staticTables, { param($name) $deltaPackage.RollbackStaticDataPath($name) })
@@ -167,7 +151,7 @@ function create-workflow
 
         function check-version
         {
-            param ([object] $folderStructure, [object] $materialSource, [object] $slicePackage, [int] $version, [string] $op)
+            param ([string] $tempPath, [string] $buildPath, [int] $version, [string] $op)
             
             if($version -eq 0)
             {
@@ -178,8 +162,6 @@ function create-workflow
                 
                 return
             }
-            
-            $tempPath = $folderStructure.NewCheckDeltaPath()
             
             $deltaFile = join-path $tempPath "delta.sql"
             $snapshotDatabaseName = $config.databaseName + $version
@@ -196,8 +178,8 @@ function create-workflow
             $nameProvider = { param($name)  $file=(join-path $tempPath "data-$name.sql"); $deltaFiles.Add($file) | out-null; $file }
             
             # TODO : get all table names from the database here, do not use slice info.
-            $staticTables = $materialSource.GetStaticTables($slicePackage) | % { $_.Name }
-            
+            $staticTables = $materialSource.GetStaticTables($buildPath)
+                        
             $database.CompareTables($config.databaseName, $snapshotDatabaseName, $staticTables, $nameProvider)
 
             $content = $deltaFiles | 
@@ -208,17 +190,15 @@ function create-workflow
                 ? {$_ -ne "" -and $_ -ne $null} |
                 % { write-output "-- delta starts here"; write-output $content; throw "The database created by sequential $op of deltas to version $version doesn't match snapshot of version $version from sources. Check custom migration of that version." } 
         }
-
-        
         
         function Main()
         {
-            $latestVersion = $versioncontrol.GetLatestRevision()
+            $latestVersion = $versionControl.GetLatestRevision()
+            
+            $solutionPath = $foldersStructure.NewSolutionPackage()
+            $versioncontrol.GetRevisionContents($solutionPath, $latestVersion)
 
-            $solutionPackage = $foldersStructure.NewSolutionPackage()
-            $versioncontrol.GetRevisionContents($solutionPackage.Root(), $latestVersion)
-
-            $deltas = get-deltas $materialSource $foldersStructure $latestVersion $solutionPackage
+            $deltas = get-deltas $latestVersion $solutionPath
             $firstDelta = $deltas | select -first 1
             $lastDelta = $deltas | select -last 1
 
@@ -227,11 +207,11 @@ function create-workflow
 
             foreach($delta in $deltas)
             {   
-                $solutionPackage = $foldersStructure.NewSolutionPackage()
-                $slicePackage = $foldersStructure.NewSlicePackage($delta.ToVersion)    
+                $solutionPath = $foldersStructure.NewSolutionPackage()
+                $buildPath = $foldersStructure.NewSlicePackage($delta.ToVersion)    
                 
-                $versioncontrol.GetRevisionContents($solutionPackage.Root(), $delta.ToVersion)
-                $materialSource.Build($solutionPackage, $slicePackage)
+                $versioncontrol.GetRevisionContents($solutionPath, $delta.ToVersion)
+                $materialSource.Build($solutionPath, $buildPath)
             }
 
             # deploy databases for comparison
@@ -240,9 +220,13 @@ function create-workflow
             $database.DropDatabase($databaseName)
             $database.CreateEmptyDatabase($databaseName)
 
+            $databaseName = $config.databaseName + "_tail_0"
+            $database.DropDatabase($databaseName)
+            $database.CreateEmptyDatabase($databaseName)
+
             foreach ($delta in $deltas)
             {
-                $slicePackage = $foldersStructure.GetSlicePackage($delta.ToVersion)
+                $buildPath = $foldersStructure.GetSlicePackage($delta.ToVersion)
                 
                 $tailDatabaseName = $config.databaseName + "_tail_" + $delta.ToVersion
                 $destinationDatabaseName = $config.databaseName + $delta.ToVersion
@@ -250,18 +234,18 @@ function create-workflow
                 $database.DropDatabase($tailDatabaseName)
                 $database.DropDatabase($destinationDatabaseName)
 
-                $materialSource.Deploy($slicePackage, $tailDatabaseName)
-                $materialSource.Deploy($slicePackage, $destinationDatabaseName)
+                $materialSource.Deploy($buildPath, $tailDatabaseName)
+                $materialSource.Deploy($buildPath, $destinationDatabaseName)
             }
 
             # initial delta
-            $solutionPackage = $foldersStructure.NewSolutionPackage()
-            $versioncontrol.GetRevisionContents($solutionPackage.Root(), $lastDelta.ToVersion)
+            $solutionPath = $foldersStructure.NewSolutionPackage()
+            $versioncontrol.GetRevisionContents($solutionPath, $lastDelta.ToVersion)
 
             $deltaPackage = $foldersStructure.NewDeltaPackage($firstDelta.ToVersion)
-            $slicePackage = $foldersStructure.GetSlicePackage($firstDelta.ToVersion)
+            $buildPath = $foldersStructure.GetSlicePackage($firstDelta.ToVersion)
 
-            create-initial-snapshot $materialSource $config $firstDelta $deltaPackage $slicePackage
+            create-transition-delta $buildPath $deltaPackage $firstDelta $true
 
             # deltas
             foreach ($delta in ($deltas | select -skip 1))
@@ -270,14 +254,13 @@ function create-workflow
                 
                 if ($delta.IsMigration)
                 {      
-                    create-migration-delta $materialSource $solutionPackage $deltaPackage $delta
+                    create-migration-delta $materialSource $solutionPath $deltaPackage $delta
                 }
                 else
                 {
-                    $sourceSlicePackage = $foldersStructure.GetSlicePackage($delta.FromVersion)
-                    $destinationSlicePackage = $foldersStructure.GetSlicePackage($delta.ToVersion)
+                    $destinationBuildPath= $foldersStructure.GetSlicePackage($delta.ToVersion)
                     
-                    create-transition-delta $materialSource $database $config $sourceSlicePackage $destinationSlicePackage $deltaPackage $delta
+                    create-transition-delta $destinationBuildPath $deltaPackage $delta $false
                 }
             }
 
@@ -301,22 +284,24 @@ function create-workflow
             {
                 $version = $delta.ToVersion
                 
-                $slicePackage = $foldersStructure.GetSlicePackage($version)
+                $buildPath = $foldersStructure.GetSlicePackage($version)
+                $tempPath = $foldersStructure.NewCheckDeltaPath()
                 
                 $database.DeployPackageToVersion($config.databaseName, $zipfile, $version)
                 
-                check-version $foldersStructure $materialSource $slicePackage $version "commit"
+                check-version $tempPath $buildPath $version "commit"
             }
 
             foreach ($delta in ($deltas | sort FromVersion -descending))
             {
                 $version = $delta.FromVersion
                 
-                $slicePackage = $foldersStructure.GetSlicePackage($version)
-                
+                $buildPath = $foldersStructure.GetSlicePackage($version)
+                $tempPath = $foldersStructure.NewCheckDeltaPath()
+
                 $database.RollbackPackageToVersion($config.databaseName, $zipfile, $version)
                 
-                check-version $foldersStructure $materialSource $slicePackage $version "rollback"
+                check-version $tempPath $buildPath $version "rollback"
             }
 
             # drop databases
@@ -336,5 +321,5 @@ function create-workflow
         }
         
         Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList @($tupleFactory, $materialSource, $sourceControl, $foldersStructure, $database, $fileSystem) -asCustomObject  
+    } -ArgumentList @($tupleFactory, $materialSource, $versionControl, $foldersStructure, $database, $fileSystem, $config) -asCustomObject  
 }
