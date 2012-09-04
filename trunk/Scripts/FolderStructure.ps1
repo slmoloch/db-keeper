@@ -5,7 +5,7 @@ function new-folder-structure
     New-Module {
         param ($config, $fileSystem)
 
-        $tempFolder = join-path $env:temp "database-automation"
+        $tempFolder = join-path $env:temp ("db-" + $config.databaseName)
         $sourcesFolder = join-path $tempFolder "Sources"
         $slicesFolder = join-path $tempFolder "Slices"
         $migrationsFolder = join-path $tempFolder "Migration"
