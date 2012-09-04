@@ -11,10 +11,8 @@ function create-config
         $dbadvance_tool = "z:\Tools\DbAdvance\DbAdvance.Host.exe"
 
         $serverName = "(local)"
-        $connectionString = "Data Source=" + $serverName + ";Integrated Security=SSPI;"
-        
-        $schemaName = "TestDatabase.dbschema"
         $databaseName = "TestDatabase"
+        $connectionString = "Data Source=" + $serverName + ";Integrated Security=SSPI;"
         
         $outputPath = "z:\Moloch\Work\Projects\db-keeper\temp\MsDbProj\"
         

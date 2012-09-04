@@ -8,6 +8,11 @@ function create-workflow
         function delta-from-migrations
         {
             param ([object[]] $migrations)
+
+            if($migrations -eq $null)
+            {
+                return , @()
+            }
             
             $deltas = $migrations |
                 %{ $tupleFactory.Create(@("FromVersion", $_[0], "ToVersion", $_[1])) } |

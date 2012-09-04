@@ -9,14 +9,15 @@ $ErrorActionPreference = "stop"
 Import-Module .\PowershellZip\PowershellZip.dll
 
 . .\msproj-fakevc-mssql-configuration.ps1
+. .\msproj-fakevc-mssql-materialsource.ps1
 
 . .\FakeConnector.ps1
 . .\MsBuild.ps1
+
 . .\FileSystem.ps1
 . .\DatabaseTools.ps1
 . .\TupleFactory.ps1
 . .\FolderStructure.ps1
-. .\MaterialSource.ps1
 . .\Workflow.ps1
 
 $config = create-config
