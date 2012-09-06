@@ -1,8 +1,10 @@
 function create-config
 {
     New-Module {
-        $svn_tool = "z:\Tools\SlikSvn\bin\svn.exe" 
-        $svn_solution_url = "https://db-keeper.googlecode.com/svn/trunk/SampleDatabases/MicrosoftDatabaseProject"
+        #$svn_tool = "z:\Tools\SlikSvn\bin\svn.exe" 
+        #$svn_solution_url = "https://db-keeper.googlecode.com/svn/trunk/SampleDatabases/MicrosoftDatabaseProject"
+
+        $fakepath = "z:\Moloch\Work\Projects\database-fake-2\"
                
         $msbuild_tool = "C:\Windows\Microsoft.NET\Framework\v4.0.30319\MSBuild.exe"
         $vsdb_tool = "C:\Program Files\Microsoft Visual Studio 10.0\VSTSDB\Deploy\vsdbcmd.exe"
@@ -15,7 +17,7 @@ function create-config
         $databaseName = "AdventureWorks2008"
         $connectionString = "Data Source=" + $serverName + ";Integrated Security=SSPI;"
         
-        $outputPath = "z:\Moloch\Work\Projects\db-keeper\temp\MsDbProjSvn\"
+        $outputPath = "z:\db-keeper\temp\MsDbProjSvn\"
         
         Export-ModuleMember -Variable * -Function *
     } -asCustomObject  

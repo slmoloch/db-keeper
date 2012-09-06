@@ -28,8 +28,8 @@ function create-database-tool
             }
                        
             $infile = [IO.File]::ReadAllText($output) `
-                -replace '(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)|(//.*)', "$1" `
                 -replace '(?s).*?USE \[.[^\]]*\]\r\nGO\r\n(.*)$',"`$1"
+                #-replace '(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)|(//.*)', "$1" `
             
             set-content -Value $infile $output
         }
@@ -40,7 +40,7 @@ function create-database-tool
             
             CompareDatabases $sourceDatabaseName $destinationDatabaseName $output
 
-            $infile = "CREATE DATABASE [$databaseName]`r`nGO`r`nUSE [$databaseName]`r`n" + [IO.File]::ReadAllText($output)
+            $infile = "CREATE DATABASE [$databaseName]`r`nGO`r`nUSE [$databaseName]`r`nGO`r`n" + [IO.File]::ReadAllText($output)
 
             set-content -Value $infile $output
         }
