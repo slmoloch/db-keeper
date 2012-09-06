@@ -1,7 +1,7 @@
 ﻿CREATE TABLE [Purchasing].[Vendor] (
     [BusinessEntityID]        INT                   NOT NULL,
-    [AccountNumber]           [dbo].[AccountNumber] NOT NULL,
-    [Name]                    [dbo].[Name]          NOT NULL,
+    [AccountNumber]           NVARCHAR (15)			NOT NULL,
+    [Name]                    NVARCHAR (50)         NOT NULL,
     [CreditRating]            TINYINT               NOT NULL,
     [PreferredVendorStatus]   [dbo].[Flag]          NOT NULL,
     [ActiveFlag]              [dbo].[Flag]          NOT NULL,

@@ -1369,28 +1369,13 @@
     <Build Include="Schema Objects\Programmability\Stored Procedures\dbo.uspLogError.proc.sql">
       <SubType>Code</SubType>
     </Build>
-    <Build Include="Schema Objects\Programmability\Functions\dbo.ufnLeadingZeros.function.sql">
-      <SubType>Code</SubType>
-    </Build>
     <Build Include="Schema Objects\Programmability\Database Triggers\ddlDatabaseTriggerLog.ddltrigger.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.AccountNumber.uddt.sql">
       <SubType>Code</SubType>
     </Build>
     <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.Flag.uddt.sql">
       <SubType>Code</SubType>
     </Build>
     <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.NameStyle.uddt.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.Name.uddt.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.OrderNumber.uddt.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Programmability\Types\User Defined Data Types\dbo.Phone.uddt.sql">
       <SubType>Code</SubType>
     </Build>
     <Build Include="Schema Objects\Tables\Sales.SpecialOffer.table.sql">
@@ -1652,18 +1637,6 @@
       <SubType>Code</SubType>
     </Build>
     <Build Include="Schema Objects\Tables\Indexes\Person.Person.PXML_Person_AddContact.xmlindex.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Tables\Indexes\Person.Person.PXML_Person_Demographics.xmlindex.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Tables\Indexes\Person.Person.XMLPATH_Person_Demographics.xmlindex.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Tables\Indexes\Person.Person.XMLPROPERTY_Person_Demographics.xmlindex.sql">
-      <SubType>Code</SubType>
-    </Build>
-    <Build Include="Schema Objects\Tables\Indexes\Person.Person.XMLVALUE_Person_Demographics.xmlindex.sql">
       <SubType>Code</SubType>
     </Build>
   </ItemGroup>

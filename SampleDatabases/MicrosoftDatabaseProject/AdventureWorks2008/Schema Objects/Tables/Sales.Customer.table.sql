@@ -3,7 +3,7 @@
     [PersonID]      INT              NULL,
     [StoreID]       INT              NULL,
     [TerritoryID]   INT              NULL,
-    [AccountNumber] AS               (isnull('AW'+[dbo].[ufnLeadingZeros]([CustomerID]),'')),
+    [AccountNumber] INT               NULL,
     [rowguid]       UNIQUEIDENTIFIER ROWGUIDCOL NOT NULL,
     [ModifiedDate]  DATETIME         NOT NULL
 );
