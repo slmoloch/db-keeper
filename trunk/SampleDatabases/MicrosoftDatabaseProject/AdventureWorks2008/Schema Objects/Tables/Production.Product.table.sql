@@ -1,6 +1,6 @@
 ﻿CREATE TABLE [Production].[Product] (
     [ProductID]             INT              IDENTITY (1, 1) NOT NULL,
-    [Name]                  [dbo].[Name]     NOT NULL,
+    [Name]                  NVARCHAR (50)     NOT NULL,
     [ProductNumber]         NVARCHAR (25)    NOT NULL,
     [MakeFlag]              [dbo].[Flag]     NOT NULL,
     [FinishedGoodsFlag]     [dbo].[Flag]     NOT NULL,
