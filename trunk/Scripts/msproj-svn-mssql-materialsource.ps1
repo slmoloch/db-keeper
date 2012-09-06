@@ -52,7 +52,7 @@ function new-material-source
             copy-item (join-path $solutionPath (join-path "AdventureWorks2008\sql\Release" $schemaName)) $buildPath
 
             new-item (join-path $buildPath "StaticData") -type directory
-            list-static-data-files $basePath | % { copy-item $_.FullName (join-path $buildPath "StaticData") }
+            list-static-data-files $solutionPath | % { copy-item $_.FullName (join-path $buildPath "StaticData") }
         }
 
         function GetStaticTables

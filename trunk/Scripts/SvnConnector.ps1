@@ -9,7 +9,7 @@ function new-version-control
         {
             param ([string] $targetFolder, [string] $version)
             
-            & $config.svn_tool export --force $config.svn_solution_url $targetFolder
+            & $config.svn_tool export -r $version --force $config.svn_solution_url $targetFolder
         }
         
         function GetLatestRevision
