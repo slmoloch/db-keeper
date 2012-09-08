@@ -1,188 +1,216 @@
-function create-database-tool
+$DatabaseClass = new-psclass Database `
 {
-    param($config)
-    
-    New-Module {
-        param($config)
+    note -private Config
+  
+    constructor {
+        param ($config)
+        $private.Config = $config
+    }
 
-        function CompareSchema
+    method CompareSchema {
+        param ([string] $prevSchema, [string] $nextSchema, [string] $output, [string] $databaseName)
+
+        & $private.Config.vsdb_tool /a:deploy /dd:- /dsp:sql /model:$prevSchema /targetmodelfile:$nextSchema /DeploymentScriptFile:$output /p:TargetDatabase=$databaseName /p:DeployDatabaseProperties=False /p:GenerateDeployStateChecks=False | out-null
+    }
+        
+    method CompareDatabases {
+        param([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $output)
+            
+        $sourceConnectionString = $private.Config.connectionString + "Database=" + $sourceDatabaseName
+        $destinationConnectionString = $private.Config.connectionString + "Database=" + $destinationDatabaseName
+            
+        $out = & $private.Config.ocdb_tool CN1=$sourceConnectionString CN2=$destinationConnectionString F=$output | Out-Default
+        
+        if($LastExitCode -ne 0)
         {
-            param ([string] $prevSchema, [string] $nextSchema, [string] $output, [string] $databaseName)
-
-            & $config.vsdb_tool /a:deploy /dd:- /dsp:sql /model:$prevSchema /targetmodelfile:$nextSchema /DeploymentScriptFile:$output /p:TargetDatabase=$databaseName /p:DeployDatabaseProperties=False /p:GenerateDeployStateChecks=False | out-null
+            throw "sqlcmd: script execution failed"
         }
         
-        function CompareDatabases
-        {
-            param([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $output)
+        #$out = [string]::join("", $out)
             
-            $sourceConnectionString = $config.connectionString + "Database=" + $sourceDatabaseName
-            $destinationConnectionString = $config.connectionString + "Database=" + $destinationDatabaseName
-            
-            $out = & $config.ocdb_tool CN1=$sourceConnectionString CN2=$destinationConnectionString F=$output
-            $out = [string]::join("", $out)
-            
-            if($out -ne "Reading first database...Reading second database...Comparing databases schemas...Generating SQL file...")
-            {
-                throw $out
-            }
+        #if($out -ne "Reading first database...Reading second database...Comparing databases schemas...Generating SQL file...")
+        #{
+        #    throw $out
+        #}
                        
-            $infile = [IO.File]::ReadAllText($output) `
-                -replace '(?s).*?USE \[.[^\]]*\]\r\nGO\r\n(.*)$',"`$1"
-                #-replace '(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)|(//.*)', "$1" `
+        $infile = [IO.File]::ReadAllText($output) `
+            -replace '(?s).*?USE \[.[^\]]*\]\r\nGO\r\n(.*)$',"`$1"
+            #-replace '(/\*([^*]|[\r\n]|(\*+([^*/]|[\r\n])))*\*+/)|(//.*)', "$1" `
             
-            set-content -Value $infile $output
-        }
+        set-content -Value $infile $output
+    }
         
-        function ScriptDatabase
-        {
-            param([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $databaseName, [string] $output)
+    method ScriptDatabase {
+        param([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $databaseName, [string] $output)
             
-            CompareDatabases $sourceDatabaseName $destinationDatabaseName $output
+        $this.CompareDatabases($sourceDatabaseName, $destinationDatabaseName, $output)
 
-            $infile = "CREATE DATABASE [$databaseName]`r`nGO`r`nUSE [$databaseName]`r`nGO`r`n" + [IO.File]::ReadAllText($output)
+        $infile = "CREATE DATABASE [$databaseName]`r`nGO`r`nUSE [$databaseName]`r`nGO`r`n" + [IO.File]::ReadAllText($output)
 
-            set-content -Value $infile $output
-        }
+        set-content -Value $infile $output
+    }
         
-        function DropDatabase
-        {
-            param([string] $databaseName)
+    method DropDatabase {
+        param([string] $databaseName)
             
-            $query = "IF (DB_ID(N'$databaseName') IS NOT NULL) 
-                BEGIN
-                    ALTER DATABASE [$databaseName]
-                    SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-                    DROP DATABASE [$databaseName];
-                END"
+        $query = "IF (DB_ID(N'$databaseName') IS NOT NULL) 
+            BEGIN
+                ALTER DATABASE [$databaseName]
+                SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                DROP DATABASE [$databaseName];
+            END"
                             
-            $out = & $config.sqlcmd_tool -S $config.serverName -Q $query
+        & $private.Config.sqlcmd_tool -S $private.Config.serverName -Q $query | Out-Default
             
-            if($out -ne $null)
-            {
-                if(!$out.Contains("Nonqualified transactions are being rolled back"))
-                {
-                    throw $out
-                }
-            }
-        }
-        
-        function CreateEmptyDatabase
+        if($LastExitCode -ne 0)
         {
-            param([string] $databaseName)
+            throw "sqlcmd: script execution failed"
+        }
+    }
+        
+    method CreateEmptyDatabase {
+        param([string] $databaseName)
             
-            $query = "CREATE DATABASE [$databaseName]`r`nGO"
+        $query = "CREATE DATABASE [$databaseName]`r`nGO"
                             
-            $out = & $config.sqlcmd_tool -S $config.serverName -Q $query
+        $out = & $private.Config.sqlcmd_tool -S $private.Config.serverName -Q $query | Out-Default
             
-            (($out | select -last 1)  -replace '\s+', '') -ne "NULL"
-        }
-
-        function Exists
+        if($LastExitCode -ne 0)
         {
-            param([string] $databaseName)
+            throw "sqlcmd: script execution failed"
+        }
+    }
+
+    method Exists {
+        param([string] $databaseName)
             
-            $query = "
-                SET NOCOUNT ON
-                GO 
-                SELECT DB_ID(N'$databaseName')"
+        $query = "
+            SET NOCOUNT ON
+            GO 
+            SELECT DB_ID(N'$databaseName')"
                             
-            $out = & $config.sqlcmd_tool -S $config.serverName -Q $query
-            
-            (($out | select -last 1)  -replace '\s+', '') -ne "NULL"
-        }
-        
-        function CreateScript
-        {
-            param ([string] $schema, [string] $output, [string] $databaseName)
+        $out = & $private.Config.sqlcmd_tool -S $private.Config.serverName -Q $query
 
-            & $config.vsdb_tool /a:deploy /dd:- /dsp:sql /model:$schema /DeploymentScriptFile:$output /p:TargetDatabase=$databaseName /p:DeployDatabaseProperties=False /p:GenerateDeployStateChecks=False | out-null
-            
-            $infile = [IO.File]::ReadAllText((join-path $pwd $output)) `
-                -replace '(?s).*?(CREATE DATABASE \[\$\(DatabaseName\)\].*)$',"`$1" `
-                -replace '\[\$\(DatabaseName\)\]', ("[" + $databaseName + "]")
-            
-            set-content -Value $infile $output
+        if($LastExitCode -ne 0)
+        {
+            throw "sqlcmd: script execution failed"
         }
+            
+        (($out | select -last 1)  -replace '\s+', '') -ne "NULL"
+    }
         
-        function DeployPackage
-        {
-            param ([string] $databaseName, [string] $packagePath)
+    method CreateScript {
+        param ([string] $schema, [string] $output, [string] $databaseName)
 
-            & $config.dbadvance_tool -c $config.connectionString $databaseName $packagePath
-        }
-        
-        function DeployPackageToVersion
+        & $private.Config.vsdb_tool /a:deploy /dd:- /dsp:sql /model:$schema /DeploymentScriptFile:$output /p:TargetDatabase=$databaseName /p:DeployDatabaseProperties=False /p:GenerateDeployStateChecks=False | Out-Default
+
+        if($LastExitCode -ne 0)
         {
-            param ([string] $databaseName, [string] $packagePath, [int32] $version)
+            throw "vsdb: script creation failed"
+        }
             
-            & $config.dbadvance_tool -cv $config.connectionString $databaseName $packagePath $version
-        }
-        
-        function RollbackPackageToVersion
-        {
-            param ([string] $databaseName, [string] $packagePath, [int32] $version)
+        $infile = [IO.File]::ReadAllText((join-path $pwd $output)) `
+            -replace '(?s).*?(CREATE DATABASE \[\$\(DatabaseName\)\].*)$',"`$1" `
+            -replace '\[\$\(DatabaseName\)\]', ("[" + $databaseName + "]")
             
-            & $config.dbadvance_tool -rv $config.connectionString $databaseName $packagePath $version
-        }
+        set-content -Value $infile $output
+    }
+        
+    method DeployPackage {
+        param ([string] $databaseName, [string] $packagePath)
 
-        function GenerateDropScript
+        & $private.Config.dbadvance_tool -c $private.Config.connectionString $databaseName $packagePath | Out-Default
+
+        if($LastExitCode -ne 0)
         {
-            param ([string] $databaseName, [string] $output)
+            throw "dbadvance: script creation failed"
+        }
+    }
+        
+    method DeployPackageToVersion {
+        param ([string] $databaseName, [string] $packagePath, [int32] $version)
 
-            $query = "
-                    USE [master]
-                    GO
+        $versionName = "{0:D4}" -f $version
+            
+        & $private.Config.dbadvance_tool -cv $private.Config.connectionString $databaseName $packagePath $versionName | Out-Default
+
+        if($LastExitCode -ne 0)
+        {
+            throw "dbadvance: script creation failed"
+        }
+    }
+        
+    method RollbackPackageToVersion {
+        param ([string] $databaseName, [string] $packagePath, [int32] $version)
+            
+        $versionName = "{0:D4}" -f $version
+
+        & $private.Config.dbadvance_tool -rv $private.Config.connectionString $databaseName $packagePath $versionName | Out-Default
+
+        if($LastExitCode -ne 0)
+        {
+            throw "dbadvance: script creation failed"
+        }
+    }
+
+    method GenerateDropScript {
+        param ([string] $databaseName, [string] $output)
+
+        $query = "
+                USE [master]
+                GO
                     
-                    ALTER DATABASE [$databaseName]
-                    SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
-                    GO
+                ALTER DATABASE [$databaseName]
+                SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+                GO
                     
-                    DROP DATABASE [$databaseName];"
+                DROP DATABASE [$databaseName];"
                 
-            New-Item $output -type file -force -value $query | out-null
-        }
+        New-Item $output -type file -force -value $query | out-null
+    }
                 
-        function DeploySchema
+    method DeploySchema {
+        param ([string] $schema, [string] $databaseName)
+            
+        $connectionString = $private.Config.connectionString
+            
+        & $private.Config.vsdb_tool /a:deploy /dd:+ /model:$schema /p:TargetDatabase=$databaseName /cs:$connectionString /p:AlwaysCreateNewDatabase=True | Out-Default
+
+        if($LastExitCode -ne 0)
         {
-            param ([string] $schema, [string] $databaseName)
-            
-            $connectionString = $config.connectionString
-            
-            & $config.vsdb_tool /a:deploy /dd:+ /model:$schema /p:TargetDatabase=$databaseName /cs:$connectionString /p:AlwaysCreateNewDatabase=True | out-null
+            throw "vsdb: script creation failed"
         }
+    }
         
-        function Execute
+    method Execute {
+        param ([string] $script, [string] $databaseName)
+            
+        & $private.Config.sqlcmd_tool -S $private.Config.serverName -d $databaseName -i $script | Out-Default
+
+        if($LastExitCode -ne 0)
         {
-            param ([string] $script, [string] $databaseName)
-            
-            & $config.sqlcmd_tool -S $config.serverName -d $databaseName -i $script | out-null
+            throw "sqlcmd: script execution failed"
         }
+    }
         
-        function CompareTables
+    method CompareTables {
+        param ([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string[]] $tables, [ScriptBlock] $nameProvider)
+            
+        foreach($table in $tables)
         {
-            param ([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string[]] $tables, [ScriptBlock] $nameProvider)
-            
-            foreach($table in $tables)
-            {
-                CompareTable $sourceDatabaseName $destinationDatabaseName $table (& $nameProvider $table)
-            }
+            $this.CompareTable($sourceDatabaseName, $destinationDatabaseName, $table, (& $nameProvider $table))
         }
+    }
         
-        function CompareTable
+    method CompareTable {
+        param ([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $table, [string] $output)
+        
+        # source and destination are deliberately swapped due to tablediff behaviour
+        & $private.Config.tablediff_tool -sourceserver $private.Config.serverName -sourcedatabase $destinationDatabaseName -sourcetable $table -destinationserver $private.Config.serverName -destinationdatabase $sourceDatabaseName -destinationtable $table -f $output -strict | Out-Default
+        
+        if($LastExitCode -ne 0)
         {
-            param ([string] $sourceDatabaseName, [string] $destinationDatabaseName, [string] $table, [string] $output)
-        
-            # source and destination are deliberately swapped due to tablediff behaviour
-            $out = & $config.tablediff_tool -sourceserver $config.serverName -sourcedatabase $destinationDatabaseName -sourcetable $table -destinationserver $config.serverName -destinationdatabase $sourceDatabaseName -destinationtable $table -f $output -strict
-            $out = [string]::join([Environment]::NewLine, $out)
-            
-            if($out.Contains("does not exist, or the user specified doesn't have permissions to access it"))
-            {
-                throw $out
-            }
+            throw "tablediff: table comparison failed"
         }
-        
-        Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList $config -asCustomObject
+    }
 }

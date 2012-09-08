@@ -1,24 +1,31 @@
-function new-version-control
+$VersionControlClass = new-psclass VersionControl `
 {
-    param($config)
-    
-    New-Module {
-        param($config)
+    note -private Config
+  
+    constructor {
+        param ($config)
+        $private.Config = $config
+    }
 
-        function GetRevisionContents
+    method GetRevisionContents {
+        param ([string] $targetFolder, [string] $version)
+
+        & $config.svn_tool export -r $version --force $config.svn_solution_url $targetFolder | Out-Default
+
+        if($LastExitCode -ne 0)
         {
-            param ([string] $targetFolder, [string] $version)
-            
-            & $config.svn_tool export -r $version --force $config.svn_solution_url $targetFolder
+            throw "svn: sources fetching failed"
         }
-        
-        function GetLatestRevision
+    }
+
+    method GetLatestRevision {
+        [xml] $xml = & $config.svn_tool info --xml $config.svn_solution_url   
+
+        if($LastExitCode -ne 0)
         {
-            [xml] $xml = & $config.svn_tool info --xml $config.svn_solution_url
-            
-            $xml.info.entry.commit.revision
+            throw "svn: request failed"
         }
-        
-        Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList $config -asCustomObject
+
+        $xml.info.entry.commit.revision 
+    }
 }

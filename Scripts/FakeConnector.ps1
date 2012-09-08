@@ -1,28 +1,25 @@
-function new-version-control
+$VersionControlClass = new-psclass VersionControl `
 {
-    param($config)
-    
-    New-Module {
-        param($config)
+    note -private Config
+  
+    constructor {
+        param ($config)
+        $private.Config = $config
+    }
 
-        function GetRevisionContents
-        {
-            param ([string] $targetFolder, [string] $version)
+    method GetRevisionContents { 
+        param ([string] $targetFolder, [string] $version)
             
-            $path = join-path $config.fakepath (join-path $version "*")
+        $path = join-path $private.Config.fakepath (join-path $version "*")
             
-            copy-item $path -destination $targetFolder -recurse
-        }
-        
-        function GetLatestRevision
-        {
-            get-childitem $config.fakepath | 
-                %{ $_.Name} |
-                %{ [int32]::parse($_) } | 
-                sort |
-                select -last 1
-        }
-        
-        Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList $config -asCustomObject
-}
+        copy-item $path -destination $targetFolder -recurse
+    }
+
+    method GetLatestRevision { 
+        get-childitem $config.fakepath | 
+            %{ $_.Name} |
+            %{ [int32]::parse($_) } | 
+            sort |
+            select -last 1
+    }
+} 

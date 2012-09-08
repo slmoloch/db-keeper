@@ -1,18 +1,27 @@
-function create-msbuild
+$MsBuildClass = new-psclass MsBuild `
 {
-    param($config)
-    
-    New-Module {
-        param($config)
-        
-        function Build
-        {
-            param ([string] $solutionPath)
+    note -private Config
+  
+    constructor {
+        param ($config)
+        $private.Config = $config
+    }
 
-            & $config.msbuild_tool $solutionPath /p:Configuration=Release /t:Clean
-            & $config.msbuild_tool $solutionPath /p:Configuration=Release /t:Build
+    method Build {
+        param ([string] $solutionPath)
+
+        & $config.msbuild_tool $solutionPath /p:Configuration=Release /t:Clean | Out-Default
+
+        if($LastExitCode -ne 0)
+        {
+            throw "msbuild: cleaning $solutionPath failed. Check logs."
         }
-        
-        Export-ModuleMember -Variable * -Function *                
-    } -ArgumentList $config -asCustomObject  
+
+        $out = & $config.msbuild_tool $solutionPath /p:Configuration=Release /t:Build | Out-Default
+
+        if($LastExitCode -ne 0)
+        {
+            throw "msbuild: building $solutionPath failed. Check logs."
+        }
+    }
 }

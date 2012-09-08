@@ -39,7 +39,8 @@ function new-folder-structure
         {
             param ($version)
             
-            $deltaPackage = new-delta-package (join-path $deltasPath $version) $fileSystem
+            $versionFolder = "{0:D4}" -f $version
+            $deltaPackage = new-delta-package (join-path $deltasPath $versionFolder) $fileSystem
             $deltaPackage.Init()
             $deltaPackage
         }
@@ -48,7 +49,8 @@ function new-folder-structure
         {
             param ($version)
             
-            $deltaPackage = new-delta-package (join-path $deltasPath $version) $fileSystem
+            $versionFolder = "{0:D4}" -f $version
+            $deltaPackage = new-delta-package (join-path $deltasPath $versionFolder) $fileSystem
             $deltaPackage
         }
         

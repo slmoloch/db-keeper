@@ -1,161 +1,154 @@
-function new-material-source
+$MaterialSourceClass = new-psclass MaterialSource `
 {
-    param($database, $msbuild)
-     
-    New-Module {
+    note -private MsBuild
+    note -private Database
+    note -private SchemaName
+    
+
+    constructor {
         param($database, $msbuild)
 
-        $schemaName = "AdventureWorks2008.dbschema"   
+        $private.MsBuild = $msbuild
+        $private.Database = $database
+        $private.SchemaName = "AdventureWorks2008.dbschema"
+    }
 
-        function GetTransitionVersions
-        {
-            param ([string] $solutionPath)
+    method GetTransitionVersions {
+        param ([string] $solutionPath)
             
-            [xml] $xml = get-content (join-path $solutionPath "slices.xml")
+        [xml] $xml = get-content (join-path $solutionPath "slices.xml")
             
-            $xml.versions.version | 
-                %{ [int32]::parse($_) }
-        }
+        $xml.versions.version | 
+            %{ [int32]::parse($_) }
+    }
+
         
-        function GetMigrations
-        {
-            param ([string] $solutionPath)
+    method GetMigrations {
+        param ([string] $solutionPath)
             
-            , (list-migrations $solutionPath |
-                %{ $_.Name } |
-                %{ 
-                    $data = $_.replace(".sql", "").split("-")
+        , ($private.ListMigrations($solutionPath) |
+            %{ $_.Name } |
+            %{ 
+                $data = $_.replace(".sql", "").split("-")
                     
-                    $fromVersion = [int32]::parse($data[0])
-                    $toVersion = [int32]::parse($data[1])
+                $fromVersion = [int32]::parse($data[0])
+                $toVersion = [int32]::parse($data[1])
                     
-                    ,@($fromVersion, $toVersion)
-                } |
-                ?{ $_[0] -le $_[1] })
-        }
-           
-        function GetMigrationPath
-        {
-            param ([string] $solutionPath, [int32] $from, [int32] $to)
+                ,@($fromVersion, $toVersion)
+            } |
+            ?{ $_[0] -le $_[1] })
+    }
+
+    method GetMigrationPath {
+        param ([string] $solutionPath, [int32] $from, [int32] $to)
             
-            $migrationsPath = join-path $solutionPath "AdventureWorks2008\Scripts\Migrations"
+        $migrationsPath = join-path $solutionPath "AdventureWorks2008\Scripts\Migrations"
                     
-            join-path $migrationsPath ($from.ToString() + "-" + $to.ToString() + ".sql")
-        }
-        
-        function Build
-        {
-            param ([string] $solutionPath, [string] $buildPath)
+        join-path $migrationsPath ($from.ToString() + "-" + $to.ToString() + ".sql")
+    }
+
+    method Build {
+        param ([string] $solutionPath, [string] $buildPath)
             
-            $msbuild.Build((join-path $solutionPath "AdventureWorks2008.sln"))
+        $msbuild.Build((join-path $solutionPath "AdventureWorks2008.sln"))
     
-            copy-item (join-path $solutionPath (join-path "AdventureWorks2008\sql\Release" $schemaName)) $buildPath
+        copy-item (join-path $solutionPath (join-path "AdventureWorks2008\sql\Release" $private.SchemaName)) $buildPath
 
-            new-item (join-path $buildPath "StaticData") -type directory
-            list-static-data-files $solutionPath | % { copy-item $_.FullName (join-path $buildPath "StaticData") }
-        }
+        new-item (join-path $buildPath "StaticData") -type directory
 
-        function GetStaticTables
-        {
-            param ([string] $buildPath)
+        $private.ListStaticDataFiles($solutionPath) | % { copy-item $_.FullName (join-path $buildPath "StaticData") }
+    }
+
+    method GetStaticTables {
+        param ([string] $buildPath)
             
-            , (get-static-table-scripts $buildPath  | % { $_.Name })
-        }
+        , ($private.GetStaticTableScripts($buildPath)  | % { $_.Name })
+    }
         
-        function Deploy
+    method Deploy {
+        param ([object] $buildPath, [string] $databaseName)
+            
+        $database.DeploySchema((join-path $buildPath $private.SchemaName), $databaseName)
+            
+        foreach($table in ($private.GetStaticTableScripts($buildPath)))
         {
-            param ([object] $buildPath, [string] $databaseName)
-            
-            $database.DeploySchema((join-path $buildPath $schemaName), $databaseName)
-            
-            foreach($table in (get-static-table-scripts $buildPath))
-            {
-                $database.Execute($table.Path, $databaseName)
-            } 
-        }
-        
-        # ----
+            $database.Execute($table.Path, $databaseName)
+        } 
+    }
 
-        function get-static-table-scripts
+    # ----
+    method -private GetStaticTableScripts {
+        param ([string] $buildPath)
+
+        $indexFile = $private.GetStaticDataIndexfile($buildPath)
+            
+        $tableNames = @()
+            
+        if (test-path $indexFile)
         {
-            param ([string] $buildPath)
-
-            $indexFile = get-static-data-indexfile $buildPath
-            
-            $tableNames = @()
-            
-            if (test-path $indexFile)
-            {
-                [xml]$index = get-content $indexFile
+            [xml]$index = get-content $indexFile
                 
-                foreach($table in $index.tables.table)
-                {
-                    $tableName = $table.name
-                    $filePath = get-static-data-tablefile $buildPath $table.name
-                    $tableNames += @($tupleFactory.Create(@("Name", $tableName, "Path", $filePath)))
-                }
+            foreach($table in $index.tables.table)
+            {
+                $tableName = $table.name
+                $filePath = $private.GetStaticDataTablefile($buildPath, $table.name)
+
+                $tableNames += @($tupleFactory.Create(@("Name", $tableName, "Path", $filePath)))
             }
+        }
             
-            ,$tableNames
-        }
+        ,$tableNames
+    }
 
-        function get-static-data-tablefile()
+    method -private GetStaticDataTablefile {
+        param ([string] $buildPath, [string] $table)
+           
+        $staticDataPath = join-path $buildPath "StaticData"
+        $tableFile = (join-path $staticDataPath ($table + ".sql"))
+           
+        if (!(test-path $tableFile))
         {
-           param ([string] $buildPath, [string] $table)
-           
-           $staticDataPath = join-path $buildPath "StaticData"
-           $tableFile = (join-path $staticDataPath ($table + ".sql"))
-           
-           if (!(test-path $tableFile))
-           {
-                throw ("Static data file for table '" + $table + "' is not found.")
-           }
-           
-           $tableFile
+            throw ("Static data file for table '" + $table + "' is not found.")
         }
+           
+        $tableFile
+    }
 
-        function list-migrations
-        {
-            param($basePath)
+    method -private ListMigrations {
+        param($basePath)
 
-            $migrationsPath = join-path $basePath "AdventureWorks2008\Scripts\Migrations"
+        $migrationsPath = join-path $basePath "AdventureWorks2008\Scripts\Migrations"
                     
-            if (test-path $migrationsPath)
-            {
-                get-childItem $migrationsPath "*.sql"
-            }
-            else
-            {
-                @()
-            }
-        }
-
-        function get-static-data-indexfile()
+        if (test-path $migrationsPath)
         {
-           param ([string] $buildPath)
-
-           $staticDataPath = join-path $buildPath "StaticData"
-
-           join-path $staticDataPath "index.xml"
+            get-childItem $migrationsPath "*.sql"
         }
-
-        function list-static-data-files
+        else
         {
-            param ($basePath)
+            @()
+        }
+    }
 
-            $staticDataPath = join-path $basePath "AdventureWorks2008\Scripts\StaticData"
+    method -private GetStaticDataIndexfile {
+        param ([string] $buildPath)
+
+        $staticDataPath = join-path $buildPath "StaticData"
+
+        join-path $staticDataPath "index.xml"
+    }
+
+    method -private ListStaticDataFiles {
+        param ($basePath)
+
+        $staticDataPath = join-path $basePath "AdventureWorks2008\Scripts\StaticData"
                      
-            if (test-path $staticDataPath)
-            {
-                get-childItem $staticDataPath
-            }
-            else
-            {
-                @()
-            }   
+        if (test-path $staticDataPath)
+        {
+            get-childItem $staticDataPath
         }
-
-
-        Export-ModuleMember -Variable * -Function *
-    } -ArgumentList @($database, $msbuild) -asCustomObject  
+        else
+        {
+            @()
+        }   
+    }
 }
